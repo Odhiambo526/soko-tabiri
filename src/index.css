@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:wght@400;600;700&display=swap');
+
+:root {
+  /* Kenyan flag inspired + Zcash gold */
+  --kenyan-black: #0a0a0a;
+  --kenyan-red: #bb2532;
+  --kenyan-green: #006b3f;
+  --zcash-gold: #f4b728;
+  --zcash-gold-light: #ffd466;
+  
+  /* UI colors */
+  --bg-primary: #0d0d0d;
+  --bg-secondary: #161616;
+  --bg-card: #1a1a1a;
+  --bg-elevated: #222222;
+  --text-primary: #fafafa;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+  --border-color: #2a2a2a;
+  --border-accent: #333333;
+  
+  /* Status colors */
+  --yes-green: #22c55e;
+  --no-red: #ef4444;
+  --pending-amber: #f59e0b;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 600;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-accent);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Custom selection */
+::selection {
+  background: var(--zcash-gold);
+  color: var(--kenyan-black);
+}
+
+#root {
+  min-height: 100vh;
+}
