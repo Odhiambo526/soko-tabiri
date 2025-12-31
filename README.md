@@ -103,17 +103,6 @@ POST /api/wallet/:id/faucet    - Request testnet ZEC
 GET  /api/network/status       - Network status
 ```
 
-## Differentiation
-
-| Feature | Polymarket | Augur | Soko Tabiri |
-|---------|------------|-------|-------------|
-| Privacy | ❌ Public | ❌ Public | ✅ Shielded |
-| Africa | ❌ | ❌ | ✅ |
-| China | ❌ | ❌ | ✅ |
-| Japan | ❌ | ❌ | ✅ |
-| Russia | ❌ | ❌ | ✅ |
-| Blockchain | Polygon | Ethereum | Zcash |
-
 ## License
 
 MIT
