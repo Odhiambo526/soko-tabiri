@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Menu, X, Shield, Zap, Droplets } from 'lucide-react';
+import { Wallet, Menu, X, Shield, Zap, Droplets, Globe } from 'lucide-react';
 
 export default function Header({ wallet, onConnectWallet, onRequestFaucet, networkStatus }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -15,7 +15,7 @@ export default function Header({ wallet, onConnectWallet, onRequestFaucet, netwo
             animate={{ opacity: 1, x: 0 }}
           >
             <div className="logo-icon">
-              <Shield size={24} />
+              <Globe size={24} />
             </div>
             <span className="logo-text">Soko Tabiri</span>
             <span className="logo-badge">ZEC</span>

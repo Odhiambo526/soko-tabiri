@@ -7,16 +7,8 @@ import MarketCard from './components/MarketCard';
 import TradeModal from './components/TradeModal';
 import Portfolio from './components/Portfolio';
 import api from './services/api';
+import { markets as fallbackMarkets, categories as fallbackCategories, userPortfolio as fallbackPortfolio } from './data/markets';
 import './App.css';
-
-const categories = [
-  { id: 'all', name: 'All Markets', icon: 'Grid' },
-  { id: 'Economy', name: 'Economy', icon: 'TrendingUp' },
-  { id: 'Sports', name: 'Sports', icon: 'Trophy' },
-  { id: 'Technology', name: 'Technology', icon: 'Cpu' },
-  { id: 'Finance', name: 'Finance', icon: 'Landmark' },
-  { id: 'Infrastructure', name: 'Infrastructure', icon: 'Building2' },
-];
 
 function App() {
   const [wallet, setWallet] = useState({
@@ -28,7 +20,8 @@ function App() {
     balance: 0,
   });
 
-  const [markets, setMarkets] = useState([]);
+  const [markets, setMarkets] = useState(fallbackMarkets);
+  const [categories] = useState(fallbackCategories);
   const [portfolio, setPortfolio] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [selectedMarket, setSelectedMarket] = useState(null);
@@ -56,11 +49,14 @@ function App() {
     try {
       setLoading(true);
       const data = await api.getMarkets(activeCategory);
-      setMarkets(data.markets || []);
+      if (data.markets && data.markets.length > 0) {
+        setMarkets(data.markets);
+      } else {
+        setMarkets(fallbackMarkets);
+      }
     } catch (error) {
       console.error('Failed to fetch markets:', error);
-      // Use fallback data if backend is not available
-      setMarkets([]);
+      setMarkets(fallbackMarkets);
     } finally {
       setLoading(false);
     }
@@ -81,13 +77,13 @@ function App() {
         pnlPercent: parseFloat(positionsData.summary.pnlPercent),
       });
 
-      // Update wallet balance
       setWallet(prev => ({
         ...prev,
         balance: balanceData.balance.available,
       }));
     } catch (error) {
       console.error('Failed to fetch portfolio:', error);
+      setPortfolio(fallbackPortfolio);
     }
   };
 
@@ -102,12 +98,10 @@ function App() {
 
   const handleConnectWallet = async () => {
     try {
-      // Try to get saved viewing key from localStorage
       const savedKey = localStorage.getItem('soko_viewing_key');
       const data = await api.connectWallet(savedKey);
 
       if (data.success) {
-        // Save viewing key for reconnection
         localStorage.setItem('soko_viewing_key', data.user.viewingKey);
 
         setWallet({
@@ -121,7 +115,15 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
-      alert('Failed to connect wallet. Is the backend running?');
+      // Fallback for demo mode
+      setWallet({
+        connected: true,
+        userId: 'demo_user',
+        address: 'zs1demo...address',
+        shieldedAddress: 'zs1demo...shielded',
+        viewingKey: 'demo_viewing_key',
+        balance: 0,
+      });
     }
   };
 
@@ -140,7 +142,12 @@ function App() {
       }
     } catch (error) {
       console.error('Faucet request failed:', error);
-      alert('Failed to request testnet ZEC');
+      // Demo mode fallback
+      setWallet(prev => ({
+        ...prev,
+        balance: prev.balance + 5.0,
+      }));
+      alert('Demo mode: Credited 5 ZEC');
     }
   };
 
@@ -153,7 +160,6 @@ function App() {
     try {
       const result = await api.executeTrade(marketId, wallet.userId, side, amountZec);
       if (result.success) {
-        // Refresh data
         fetchMarkets();
         fetchPortfolio();
         setSelectedMarket(null);
@@ -168,7 +174,7 @@ function App() {
   const filteredMarkets = useMemo(() => {
     if (activeCategory === 'all') return markets;
     return markets.filter(
-      (m) => m.category.toLowerCase() === activeCategory.toLowerCase()
+      (m) => m.category === activeCategory
     );
   }, [activeCategory, markets]);
 
@@ -194,7 +200,7 @@ function App() {
               <span>
                 {networkStatus.zcash?.connected 
                   ? `Connected to Zcash ${networkStatus.zcash.network} (Block #${networkStatus.zcash.blockHeight})`
-                  : 'Running in offline mode - Backend not connected to Zcash network'
+                  : 'Demo Mode - Connect backend for live trading'
                 }
               </span>
             </div>
@@ -205,7 +211,7 @@ function App() {
             <section className="section trending-section">
               <div className="section-header">
                 <h2>🔥 Trending Markets</h2>
-                <p>Most active predictions in Kenya right now</p>
+                <p>Most active predictions across emerging markets</p>
               </div>
               <div className="markets-grid trending">
                 {trendingMarkets.map((market, index) => (
@@ -223,8 +229,8 @@ function App() {
           {/* All Markets Section */}
           <section className="section" id="markets">
             <div className="section-header">
-              <h2>All Markets</h2>
-              <p>Browse and trade on Kenyan prediction markets</p>
+              <h2>Global Markets</h2>
+              <p>Trade on events in Africa, Asia, Middle East, Latin America & more</p>
             </div>
 
             <CategoryFilter
@@ -251,8 +257,7 @@ function App() {
               </div>
             ) : (
               <div className="empty-state">
-                <p>No markets found. Start the backend server to load markets.</p>
-                <code>cd backend && npm run dev</code>
+                <p>No markets found in this category.</p>
               </div>
             )}
           </section>
@@ -270,14 +275,15 @@ function App() {
         <div className="footer-content">
           <div className="footer-brand">
             <span className="footer-logo">Soko Tabiri</span>
-            <p>Kenya's first privacy-focused prediction market</p>
+            <p>Private prediction markets for emerging economies</p>
           </div>
           <div className="footer-links">
             <div className="footer-col">
-              <h4>Platform</h4>
-              <a href="#markets">Markets</a>
-              <a href="#portfolio">Portfolio</a>
-              <a href="#learn">Learn</a>
+              <h4>Regions</h4>
+              <a href="#markets">Africa</a>
+              <a href="#markets">China & East Asia</a>
+              <a href="#markets">Russia & CIS</a>
+              <a href="#markets">Middle East</a>
             </div>
             <div className="footer-col">
               <h4>Resources</h4>
@@ -293,7 +299,7 @@ function App() {
           </div>
         </div>
         <div className="footer-bottom">
-          <p>Built with Zcash 🛡️ • Hakuna Matata, Hakuna Surveillance</p>
+          <p>Built with Zcash 🛡️ • Global Markets, Zero Exposure</p>
         </div>
       </footer>
 

@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, Users, Clock, Zap } from 'lucide-react';
+import { TrendingUp, Users, Clock, Zap, MapPin } from 'lucide-react';
 
 export default function MarketCard({ market, onSelect, index }) {
   const formatCurrency = (amount) => {
+    if (amount >= 1000000) {
+      return `${(amount / 1000000).toFixed(1)}M`;
+    }
     if (amount >= 1000) {
       return `${(amount / 1000).toFixed(1)}K`;
     }
@@ -18,11 +21,14 @@ export default function MarketCard({ market, onSelect, index }) {
 
   const getCategoryColor = (category) => {
     const colors = {
-      Economy: '#f4b728',
-      Sports: '#22c55e',
-      Technology: '#3b82f6',
-      Finance: '#8b5cf6',
-      Infrastructure: '#ec4899',
+      'Africa': '#22c55e',
+      'Russia & CIS': '#3b82f6',
+      'China': '#ef4444',
+      'Japan': '#ec4899',
+      'Southeast Asia': '#8b5cf6',
+      'Middle East': '#f59e0b',
+      'Latin America': '#06b6d4',
+      'South Asia': '#f97316',
     };
     return colors[category] || '#6b7280';
   };
@@ -37,16 +43,24 @@ export default function MarketCard({ market, onSelect, index }) {
       onClick={() => onSelect(market)}
     >
       <div className="card-header">
-        <span 
-          className="category-badge"
-          style={{ 
-            background: `${getCategoryColor(market.category)}15`,
-            color: getCategoryColor(market.category),
-            borderColor: `${getCategoryColor(market.category)}30`
-          }}
-        >
-          {market.category}
-        </span>
+        <div className="card-tags">
+          <span 
+            className="category-badge"
+            style={{ 
+              background: `${getCategoryColor(market.category)}15`,
+              color: getCategoryColor(market.category),
+              borderColor: `${getCategoryColor(market.category)}30`
+            }}
+          >
+            {market.category}
+          </span>
+          {market.region && (
+            <span className="region-badge">
+              <MapPin size={10} />
+              {market.region}
+            </span>
+          )}
+        </div>
         {market.trending && (
           <span className="trending-badge">
             <TrendingUp size={12} />
@@ -85,7 +99,7 @@ export default function MarketCard({ market, onSelect, index }) {
         </div>
         <div className="stat">
           <Users size={14} />
-          <span>{market.participants}</span>
+          <span>{formatCurrency(market.participants)}</span>
         </div>
         <div className="stat">
           <Clock size={14} />
@@ -113,19 +127,38 @@ export default function MarketCard({ market, onSelect, index }) {
 
         .card-header {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
           gap: 0.5rem;
         }
 
+        .card-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.4rem;
+        }
+
         .category-badge {
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           font-weight: 600;
-          padding: 0.35rem 0.75rem;
+          padding: 0.3rem 0.6rem;
           border-radius: 20px;
           border: 1px solid;
           text-transform: uppercase;
           letter-spacing: 0.03em;
+        }
+
+        .region-badge {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 0.7rem;
+          font-weight: 500;
+          padding: 0.3rem 0.6rem;
+          background: var(--bg-elevated);
+          border: 1px solid var(--border-color);
+          border-radius: 20px;
+          color: var(--text-muted);
         }
 
         .trending-badge {
@@ -138,10 +171,11 @@ export default function MarketCard({ market, onSelect, index }) {
           background: rgba(34, 197, 94, 0.1);
           color: var(--yes-green);
           border-radius: 20px;
+          flex-shrink: 0;
         }
 
         .card-title {
-          font-size: 1.1rem;
+          font-size: 1.05rem;
           font-weight: 600;
           line-height: 1.4;
           color: var(--text-primary);
@@ -230,4 +264,3 @@ export default function MarketCard({ market, onSelect, index }) {
     </motion.div>
   );
 }
-

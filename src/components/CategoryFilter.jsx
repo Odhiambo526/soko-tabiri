@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { Grid, TrendingUp, Trophy, Cpu, Landmark, Building2 } from 'lucide-react';
+import { Globe, TrendingUp, Trophy, Cpu, Landmark, Building2 } from 'lucide-react';
 
 const iconMap = {
-  Grid,
+  Globe,
   TrendingUp,
   Trophy,
   Cpu,
@@ -15,7 +15,7 @@ export default function CategoryFilter({ categories, activeCategory, onCategoryC
     <div className="category-filter">
       <div className="filter-scroll">
         {categories.map((category) => {
-          const Icon = iconMap[category.icon];
+          const Icon = iconMap[category.icon] || Globe;
           const isActive = activeCategory === category.id;
           
           return (
@@ -99,4 +99,3 @@ export default function CategoryFilter({ categories, activeCategory, onCategoryC
     </div>
   );
 }
-

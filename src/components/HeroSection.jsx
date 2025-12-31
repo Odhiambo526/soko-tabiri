@@ -27,9 +27,9 @@ export default function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          Predict Kenya's Future,
+          Global Markets,
           <br />
-          <span className="highlight">Privately</span>
+          <span className="highlight">Zero Exposure</span>
         </motion.h1>
 
         <motion.p
@@ -38,8 +38,8 @@ export default function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          Trade on Kenyan politics, economy, sports & more. 
-          Powered by Zcash for complete financial privacy.
+          Trade on Africa, China, Japan, Russia & emerging markets. 
+          Shielded by Zcash—your positions stay private.
         </motion.p>
 
         <motion.div
@@ -58,8 +58,24 @@ export default function HeroSection() {
           </div>
           <div className="feature">
             <Globe size={18} />
-            <span>Kenya-Focused</span>
+            <span>Emerging Markets</span>
           </div>
+        </motion.div>
+
+        <motion.div
+          className="region-tags"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <span className="region-tag">Africa</span>
+          <span className="region-tag">China</span>
+          <span className="region-tag">Japan</span>
+          <span className="region-tag">Russia</span>
+          <span className="region-tag">Southeast Asia</span>
+          <span className="region-tag">Middle East</span>
+          <span className="region-tag">Latin America</span>
+          <span className="region-tag">South Asia</span>
         </motion.div>
       </div>
 
@@ -87,7 +103,7 @@ export default function HeroSection() {
         .orb-1 {
           width: 400px;
           height: 400px;
-          background: var(--kenyan-green);
+          background: #1a5f2a;
           top: -100px;
           left: -100px;
           opacity: 0.2;
@@ -106,7 +122,7 @@ export default function HeroSection() {
         .orb-3 {
           width: 200px;
           height: 200px;
-          background: var(--kenyan-red);
+          background: #c41e3a;
           bottom: -50px;
           left: 30%;
           opacity: 0.15;
@@ -171,6 +187,7 @@ export default function HeroSection() {
           justify-content: center;
           gap: 2rem;
           flex-wrap: wrap;
+          margin-bottom: 2rem;
         }
 
         .feature {
@@ -182,6 +199,28 @@ export default function HeroSection() {
         }
 
         .feature svg {
+          color: var(--zcash-gold);
+        }
+
+        .region-tags {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .region-tag {
+          padding: 0.4rem 0.8rem;
+          background: var(--bg-elevated);
+          border: 1px solid var(--border-color);
+          border-radius: 20px;
+          font-size: 0.8rem;
+          color: var(--text-secondary);
+          transition: all 0.2s ease;
+        }
+
+        .region-tag:hover {
+          border-color: var(--zcash-gold);
           color: var(--zcash-gold);
         }
 
@@ -197,9 +236,17 @@ export default function HeroSection() {
           .feature {
             font-size: 0.8rem;
           }
+
+          .region-tags {
+            gap: 0.4rem;
+          }
+
+          .region-tag {
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+          }
         }
       `}</style>
     </section>
   );
 }
-
