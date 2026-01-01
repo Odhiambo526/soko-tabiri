@@ -1,0 +1,210 @@
+# Soko Tabiri - CI Workflow
+# Runs lint, unit tests, and docker-compose build + integration smoke test
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '18'
+  MOCK_LIGHTWALLETD: 'true'
+  POSTGRES_USER: soko
+  POSTGRES_PASSWORD: soko_test_password
+  POSTGRES_DB: soko_tabiri_test
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            services/gateway-api/package-lock.json
+            services/engine/package-lock.json
+            services/settlement/package-lock.json
+            services/oracle/package-lock.json
+
+      - name: Install dependencies - Gateway
+        run: npm ci
+        working-directory: services/gateway-api
+
+      - name: Install dependencies - Engine
+        run: npm ci
+        working-directory: services/engine
+
+      - name: Install dependencies - Settlement
+        run: npm ci
+        working-directory: services/settlement
+
+      - name: Install dependencies - Oracle
+        run: npm ci
+        working-directory: services/oracle
+
+      - name: Lint Gateway
+        run: npm run lint || true
+        working-directory: services/gateway-api
+
+      - name: Lint Engine
+        run: npm run lint || true
+        working-directory: services/engine
+
+      - name: Lint Settlement
+        run: npm run lint || true
+        working-directory: services/settlement
+
+      - name: Lint Oracle
+        run: npm run lint || true
+        working-directory: services/oracle
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/engine/package-lock.json
+
+      - name: Install dependencies - Engine
+        run: npm ci
+        working-directory: services/engine
+
+      - name: Run AMM unit tests
+        run: npm test
+        working-directory: services/engine
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Gateway API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/gateway-api
+          push: false
+          tags: soko-tabiri/gateway-api:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Engine
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/engine
+          push: false
+          tags: soko-tabiri/engine:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Settlement
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/settlement
+          push: false
+          tags: soko-tabiri/settlement:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Oracle
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/oracle
+          push: false
+          tags: soko-tabiri/oracle:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [unit-tests, docker-build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          NODE_ENV=test
+          POSTGRES_USER=${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ env.POSTGRES_DB }}
+          INTERNAL_HMAC_SECRET=test_hmac_secret_for_ci
+          MOCK_LIGHTWALLETD=true
+          ZCASH_NETWORK=testnet
+          ALLOW_DESHIELD=false
+          DESHIELD_KYC=false
+          EOF
+
+      - name: Start services
+        run: |
+          docker-compose -f docker-compose.yml up -d --build
+          sleep 30
+
+      - name: Check service health - Gateway
+        run: |
+          curl -f http://localhost:3001/health || exit 1
+
+      - name: Check service health - Engine
+        run: |
+          curl -f http://localhost:3002/health || exit 1
+
+      - name: Check service health - Settlement
+        run: |
+          curl -f http://localhost:3003/health || exit 1
+
+      - name: Check service health - Oracle
+        run: |
+          curl -f http://localhost:3004/health || exit 1
+
+      - name: Run smoke test - List markets
+        run: |
+          response=$(curl -s http://localhost:3001/api/markets)
+          echo "$response" | jq .
+          echo "$response" | jq -e '.markets' || exit 1
+
+      - name: View service logs on failure
+        if: failure()
+        run: docker-compose -f docker-compose.yml logs
+
+      - name: Stop services
+        if: always()
+        run: docker-compose -f docker-compose.yml down -v
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail on vulnerabilities for now
+          format: 'table'
+

@@ -1,0 +1,63 @@
+# Soko Tabiri - Prometheus Configuration
+# Scrapes metrics from all backend services
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Rule files (optional)
+rule_files: []
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Gateway API Service
+  - job_name: 'gateway-api'
+    static_configs:
+      - targets: ['gateway-api:3001']
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # Engine Service (AMM + Orderbook)
+  - job_name: 'engine'
+    static_configs:
+      - targets: ['engine:3002']
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # Settlement Service
+  - job_name: 'settlement'
+    static_configs:
+      - targets: ['settlement:3003']
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # Oracle Service
+  - job_name: 'oracle'
+    static_configs:
+      - targets: ['oracle:3004']
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # PostgreSQL (if using postgres_exporter)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+
+  # Redis (if using redis_exporter)
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+

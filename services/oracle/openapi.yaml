@@ -1,0 +1,450 @@
+openapi: 3.0.3
+info:
+  title: Soko Tabiri Oracle Service API
+  description: |
+    Oracle service for market resolution, reporter management, and dispute handling.
+    
+    **Privacy:**
+    - No direct Zcash key access
+    - Stake slashing routed through settlement service
+    
+    **Authentication:**
+    - All endpoints (except /health, /metrics) require HMAC authentication
+    - Headers: `X-Soko-Signature`, `X-Soko-Timestamp`
+  version: 1.0.0
+  contact:
+    name: Soko Tabiri Team
+
+servers:
+  - url: http://localhost:3004
+    description: Local development
+
+security:
+  - hmacAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/reporters:
+    post:
+      summary: Register as a reporter
+      description: |
+        Register as an oracle reporter with a bonded stake.
+        Minimum stake: MIN_STAKE_ZAT env variable (default 1 ZEC).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReporterRegistration'
+      responses:
+        '201':
+          description: Reporter registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reporter'
+        '400':
+          description: Invalid request or insufficient stake
+
+    get:
+      summary: List registered reporters
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, suspended, slashed]
+      responses:
+        '200':
+          description: List of reporters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reporters:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reporter'
+
+  /api/reporters/{reporterId}:
+    get:
+      summary: Get reporter details
+      parameters:
+        - name: reporterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reporter details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reporter'
+        '404':
+          description: Reporter not found
+
+  /api/attestations:
+    post:
+      summary: Submit an attestation
+      description: |
+        Submit a signed attestation for a market outcome.
+        Reporter must have active stake.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttestationSubmission'
+      responses:
+        '201':
+          description: Attestation submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attestation'
+        '400':
+          description: Invalid attestation
+        '403':
+          description: Reporter not authorized
+
+  /api/attestations/market/{marketId}:
+    get:
+      summary: Get attestations for a market
+      parameters:
+        - name: marketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of attestations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attestations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Attestation'
+
+  /api/disputes:
+    post:
+      summary: Open a dispute
+      description: |
+        Dispute an attestation. Requires stake as bond.
+        Dispute window: DISPUTE_WINDOW_HOURS env variable (default 24h).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeSubmission'
+      responses:
+        '201':
+          description: Dispute opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '400':
+          description: Invalid dispute or outside window
+        '404':
+          description: Attestation not found
+
+  /api/disputes/{disputeId}:
+    get:
+      summary: Get dispute details
+      parameters:
+        - name: disputeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dispute details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '404':
+          description: Dispute not found
+
+  /api/disputes/{disputeId}/resolve:
+    post:
+      summary: Resolve a dispute
+      description: |
+        Resolve a dispute. Only authorized resolvers can call this.
+        Results in stake slashing for the losing party.
+      parameters:
+        - name: disputeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeResolution'
+      responses:
+        '200':
+          description: Dispute resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '400':
+          description: Invalid resolution
+        '403':
+          description: Not authorized to resolve
+        '404':
+          description: Dispute not found
+
+components:
+  securitySchemes:
+    hmacAuth:
+      type: apiKey
+      in: header
+      name: X-Soko-Signature
+      description: |
+        HMAC-SHA256 signature of: METHOD\nPATH\nTIMESTAMP\nBODY
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        timestamp:
+          type: string
+          format: date-time
+        service:
+          type: string
+
+    ReporterRegistration:
+      type: object
+      required:
+        - user_id
+        - stake_amount_zat
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        stake_amount_zat:
+          type: integer
+          format: int64
+          description: Stake amount in zatoshi (min MIN_STAKE_ZAT)
+
+    Reporter:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        stake_id:
+          type: string
+          format: uuid
+        stake_amount_zat:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [active, suspended, slashed]
+        attestation_count:
+          type: integer
+        accuracy_rate:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+
+    AttestationSubmission:
+      type: object
+      required:
+        - reporter_id
+        - market_id
+        - outcome
+        - signature
+      properties:
+        reporter_id:
+          type: string
+          format: uuid
+        market_id:
+          type: string
+        outcome:
+          type: string
+          enum: [yes, no, invalid]
+        signature:
+          type: string
+          description: Ed25519 signature of outcome
+        source_name:
+          type: string
+          description: 'EXAMPLE SOURCE - verify before use'
+        source_url:
+          type: string
+          format: uri
+        source_timestamp:
+          type: string
+          format: date-time
+        evidence_hash:
+          type: string
+          description: SHA256 hash of evidence
+
+    Attestation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        market_id:
+          type: string
+        reporter_id:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [yes, no, invalid]
+        signature:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, disputed, rejected]
+        source_name:
+          type: string
+        source_url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        dispute_window_end:
+          type: string
+          format: date-time
+
+    DisputeSubmission:
+      type: object
+      required:
+        - attestation_id
+        - disputer_id
+        - disputed_outcome
+        - reason
+      properties:
+        attestation_id:
+          type: string
+          format: uuid
+        disputer_id:
+          type: string
+          format: uuid
+        disputed_outcome:
+          type: string
+          enum: [yes, no, invalid]
+        reason:
+          type: string
+        evidence_hash:
+          type: string
+        evidence_url:
+          type: string
+          format: uri
+
+    Dispute:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        attestation_id:
+          type: string
+          format: uuid
+        market_id:
+          type: string
+        disputer_id:
+          type: string
+          format: uuid
+        disputed_outcome:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [open, resolved_for_reporter, resolved_for_disputer, escalated]
+        dispute_window_end:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    DisputeResolution:
+      type: object
+      required:
+        - resolution
+      properties:
+        resolution:
+          type: string
+          enum: [reporter_wins, disputer_wins, escalate]
+        notes:
+          type: string
+
+# Example cURL commands:
+#
+# Register reporter:
+#   curl -X POST http://localhost:3004/api/reporters \
+#     -H "Content-Type: application/json" \
+#     -H "X-Soko-Signature: $SIGNATURE" \
+#     -H "X-Soko-Timestamp: $TIMESTAMP" \
+#     -d '{"user_id":"...","stake_amount_zat":100000000}'
+#
+# Submit attestation:
+#   curl -X POST http://localhost:3004/api/attestations \
+#     -H "Content-Type: application/json" \
+#     -H "X-Soko-Signature: $SIGNATURE" \
+#     -H "X-Soko-Timestamp: $TIMESTAMP" \
+#     -d '{"reporter_id":"...","market_id":"afr_001","outcome":"yes","signature":"..."}'
+#
+# Open dispute:
+#   curl -X POST http://localhost:3004/api/disputes \
+#     -H "Content-Type: application/json" \
+#     -H "X-Soko-Signature: $SIGNATURE" \
+#     -H "X-Soko-Timestamp: $TIMESTAMP" \
+#     -d '{"attestation_id":"...","disputer_id":"...","disputed_outcome":"no","reason":"..."}'
+

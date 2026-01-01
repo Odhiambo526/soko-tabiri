@@ -1,0 +1,299 @@
+openapi: 3.0.3
+info:
+  title: Soko Tabiri Settlement Service API
+  description: |
+    Settlement service for Zcash transactions via lightwalletd.
+    
+    **Privacy Constraints:**
+    - Default: shielded-only transactions (z-to-z)
+    - T-address/deshield flows require `ALLOW_DESHIELD=true` AND `DESHIELD_KYC=true` env flags
+    - Keys are NEVER stored in env; KMS_KEY_ID references external HSM/KMS
+    
+    **Authentication:**
+    - All endpoints (except /health, /metrics) require HMAC authentication
+    - Headers: `X-Soko-Signature`, `X-Soko-Timestamp`
+  version: 1.0.0
+  contact:
+    name: Soko Tabiri Team
+
+servers:
+  - url: http://localhost:3003
+    description: Local development
+
+security:
+  - hmacAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/jobs:
+    post:
+      summary: Submit a settlement job
+      description: |
+        Submit a new settlement job. Jobs are processed asynchronously.
+        
+        **Privacy:** Default tx_type is 'shielded'. Transparent/deshield requires env flags.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementJobRequest'
+      responses:
+        '201':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementJob'
+        '400':
+          description: Invalid request
+        '401':
+          description: Authentication failed
+        '422':
+          description: |
+            Transparent/deshield transaction rejected.
+            Requires ALLOW_DESHIELD=true and DESHIELD_KYC=true env flags.
+
+  /api/jobs/{jobId}:
+    get:
+      summary: Get job status
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementJob'
+        '404':
+          description: Job not found
+
+  /api/jobs/{jobId}/cancel:
+    post:
+      summary: Cancel a pending job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job cancelled
+        '400':
+          description: Job cannot be cancelled (already processing)
+        '404':
+          description: Job not found
+
+  /api/network/status:
+    get:
+      summary: Get Zcash network status
+      responses:
+        '200':
+          description: Network status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkStatus'
+
+  /api/address/validate:
+    post:
+      summary: Validate a Zcash address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - address
+              properties:
+                address:
+                  type: string
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressValidation'
+
+components:
+  securitySchemes:
+    hmacAuth:
+      type: apiKey
+      in: header
+      name: X-Soko-Signature
+      description: |
+        HMAC-SHA256 signature of: METHOD\nPATH\nTIMESTAMP\nBODY
+        
+        Also requires X-Soko-Timestamp header with Unix timestamp.
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        timestamp:
+          type: string
+          format: date-time
+        service:
+          type: string
+        checks:
+          type: object
+
+    SettlementJobRequest:
+      type: object
+      required:
+        - job_type
+        - amount_zat
+      properties:
+        job_type:
+          type: string
+          enum:
+            - trade_settlement
+            - payout
+            - stake_deposit
+            - stake_withdrawal
+            - slash
+        fill_id:
+          type: string
+          format: uuid
+        stake_id:
+          type: string
+          format: uuid
+        market_id:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+        amount_zat:
+          type: integer
+          format: int64
+          description: Amount in zatoshi (1 ZEC = 100,000,000 zat)
+        tx_type:
+          type: string
+          enum: [shielded, transparent, deshield]
+          default: shielded
+          description: |
+            Transaction type. Default 'shielded'.
+            'transparent' and 'deshield' require ALLOW_DESHIELD=true and DESHIELD_KYC=true.
+
+    SettlementJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        job_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, submitted, confirmed, failed, cancelled]
+        amount_zat:
+          type: integer
+          format: int64
+        tx_type:
+          type: string
+        tx_hash:
+          type: string
+          nullable: true
+        block_height:
+          type: integer
+          nullable: true
+        confirmations:
+          type: integer
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    NetworkStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        network:
+          type: string
+          enum: [testnet, mainnet]
+        block_height:
+          type: integer
+        chain_name:
+          type: string
+        lightwalletd_url:
+          type: string
+        mock_mode:
+          type: boolean
+
+    AddressValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        type:
+          type: string
+          enum: [transparent, shielded, unified]
+          nullable: true
+        network:
+          type: string
+          enum: [testnet, mainnet]
+          nullable: true
+
+# Example cURL commands:
+# 
+# Health check (no auth):
+#   curl http://localhost:3003/health
+#
+# Submit job (with HMAC auth):
+#   TIMESTAMP=$(date +%s%3N)
+#   BODY='{"job_type":"trade_settlement","amount_zat":100000000,"user_id":"..."}'
+#   SIGNATURE=$(echo -n "POST\n/api/jobs\n$TIMESTAMP\n$BODY" | openssl dgst -sha256 -hmac "$INTERNAL_HMAC_SECRET" | cut -d' ' -f2)
+#   curl -X POST http://localhost:3003/api/jobs \
+#     -H "Content-Type: application/json" \
+#     -H "X-Soko-Signature: $SIGNATURE" \
+#     -H "X-Soko-Timestamp: $TIMESTAMP" \
+#     -d "$BODY"
+#
+# Get job status:
+#   curl http://localhost:3003/api/jobs/{jobId} \
+#     -H "X-Soko-Signature: $SIGNATURE" \
+#     -H "X-Soko-Timestamp: $TIMESTAMP"
+

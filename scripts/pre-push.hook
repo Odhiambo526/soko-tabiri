@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# .git/hooks/pre-push
+# Run the prepush verification script. If it fails, abort push.
+#
+# To install:
+#   cp scripts/pre-push.hook .git/hooks/pre-push
+#   chmod +x .git/hooks/pre-push
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Handle both direct execution and hook execution
+if [ -f "$SCRIPT_DIR/../../scripts/prepush-verify.sh" ]; then
+  VERIFY_SCRIPT="$SCRIPT_DIR/../../scripts/prepush-verify.sh"
+elif [ -f "$SCRIPT_DIR/../scripts/prepush-verify.sh" ]; then
+  VERIFY_SCRIPT="$SCRIPT_DIR/../scripts/prepush-verify.sh"
+else
+  echo "Warning: prepush-verify.sh not found. Skipping pre-push verification."
+  exit 0
+fi
+
+echo "Running pre-push verification..."
+"$VERIFY_SCRIPT"
+RESULT=$?
+
+if [ "$RESULT" -ne 0 ]; then
+  echo ""
+  echo "=============================================="
+  echo "pre-push verification failed (exit $RESULT)"
+  echo "Aborting push. Fix issues and try again."
+  echo "=============================================="
+  exit "$RESULT"
+fi
+
+echo "pre-push verification passed."
+exit 0
+

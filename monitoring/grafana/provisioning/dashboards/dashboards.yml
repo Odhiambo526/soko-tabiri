@@ -1,0 +1,15 @@
+# Soko Tabiri - Grafana Dashboard Provisioning
+apiVersion: 1
+
+providers:
+  - name: 'Soko Tabiri'
+    orgId: 1
+    folder: 'Soko Tabiri'
+    folderUid: 'soko-tabiri'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+
