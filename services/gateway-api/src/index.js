@@ -19,12 +19,18 @@ const PORT = process.env.PORT || 3001;
 // Prometheus metrics
 collectDefaultMetrics({ prefix: 'soko_gateway_' });
 
-// Middleware
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',');
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
+// Middleware - CORS configuration
+// In development, allow all origins for easier testing across WSL2/Windows
+const corsOptions = process.env.NODE_ENV === 'production'
+  ? {
+      origin: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),
+      credentials: true,
+    }
+  : {
+      origin: true, // Allow all origins in development
+      credentials: true,
+    };
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Request logging
@@ -35,6 +41,20 @@ app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
   });
   next();
+});
+
+// Root endpoint - API info
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Soko Tabiri API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      markets: '/api/markets',
+      wallet: '/api/wallet',
+      network: '/api/network/status',
+    },
+  });
 });
 
 // Health check (no auth required)
@@ -53,6 +73,25 @@ app.get('/metrics', async (req, res) => {
 // API Routes
 app.use('/api/markets', marketsRouter);
 app.use('/api/wallet', walletsRouter);
+
+// Network status endpoint (for frontend)
+app.get('/api/network/status', async (req, res) => {
+  res.json({
+    status: 'online',
+    mode: process.env.MOCK_LIGHTWALLETD === 'true' ? 'mock' : 'testnet',
+    zcash: {
+      connected: true,
+      network: 'testnet',
+      blockHeight: 2500000, // Mock value
+    },
+    services: {
+      gateway: 'healthy',
+      engine: 'healthy',
+      settlement: 'healthy',
+      oracle: 'healthy',
+    },
+  });
+});
 
 // Error handling
 app.use((err, req, res, next) => {

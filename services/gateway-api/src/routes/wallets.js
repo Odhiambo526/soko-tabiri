@@ -68,10 +68,18 @@ router.post('/connect', async (req, res) => {
     );
     const balance = balanceResult.rows[0] || { available_zat: 0, locked_zat: 0 };
 
+    // Generate deterministic demo addresses from user ID (for display only)
+    const shortId = user.id.slice(0, 8);
+    
     res.json({
+      success: true,
       user: {
         id: user.id,
         createdAt: user.created_at,
+        // Demo addresses for display (not real Zcash addresses)
+        transparentAddress: `t1demo${shortId}`,
+        shieldedAddress: `zs1demo${shortId}`,
+        viewingKey: viewingKey, // Return the key they provided
       },
       balance: {
         available: zatToZec(parseInt(balance.available_zat)),
@@ -128,20 +136,47 @@ router.get('/:id/positions', async (req, res) => {
       [req.params.id]
     );
 
-    const positions = result.rows.map((p) => ({
-      id: p.id,
-      marketId: p.market_id,
-      marketTitle: p.title,
-      side: p.side,
-      shares: parseInt(p.shares),
-      avgPrice: parseFloat(p.avg_price),
-      currentPrice: p.side === 'yes' ? parseFloat(p.yes_price) : parseFloat(p.no_price),
-      costBasis: zatToZec(parseInt(p.cost_basis_zat)),
-      resolved: p.resolved,
-      outcome: p.outcome,
-    }));
+    const positions = result.rows.map((p) => {
+      const shares = parseInt(p.shares);
+      const avgPrice = parseFloat(p.avg_price) || 0;
+      const currentPrice = p.side === 'yes' ? parseFloat(p.yes_price) : parseFloat(p.no_price);
+      const costBasis = zatToZec(parseInt(p.cost_basis_zat || 0));
+      
+      // Current market value = cost basis * (current price / avg price)
+      // Or simply: shares * current price (where shares are normalized to ZEC value)
+      // Since we store cost_basis_zat, we can calculate current value from that
+      const currentValue = avgPrice > 0 ? costBasis * (currentPrice / avgPrice) : costBasis;
+      
+      return {
+        id: p.id,
+        marketId: p.market_id,
+        marketTitle: p.title,
+        side: p.side,
+        shares: shares,
+        avgPrice: avgPrice,
+        currentPrice: currentPrice,
+        costBasis: costBasis,
+        currentValue: currentValue,
+        resolved: p.resolved,
+        outcome: p.outcome,
+      };
+    });
 
-    res.json({ positions });
+    // Calculate summary using ZEC values
+    const totalCost = positions.reduce((sum, p) => sum + p.costBasis, 0);
+    const totalValue = positions.reduce((sum, p) => sum + p.currentValue, 0);
+    const pnl = totalValue - totalCost;
+    const pnlPercent = totalCost > 0 ? ((pnl / totalCost) * 100).toFixed(2) : '0.00';
+
+    res.json({ 
+      positions,
+      summary: {
+        totalValue,
+        totalCost,
+        pnl,
+        pnlPercent,
+      }
+    });
   } catch (error) {
     console.error('Error fetching positions:', error);
     res.status(500).json({ error: 'Failed to fetch positions' });
@@ -184,12 +219,15 @@ router.post('/:id/faucet', async (req, res) => {
     );
     const balance = balanceResult.rows[0];
 
+    const newBalance = zatToZec(parseInt(balance.available_zat));
     res.json({
       success: true,
       credited: amountZec,
+      newBalance: newBalance,
+      txHash: `mock_tx_${Date.now().toString(16)}`, // Mock transaction hash
       message: `Credited ${amountZec} testnet ZEC. In production, use https://faucet.testnet.z.cash/`,
       balance: {
-        available: zatToZec(parseInt(balance.available_zat)),
+        available: newBalance,
       },
     });
   } catch (error) {

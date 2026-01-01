@@ -52,9 +52,11 @@ export default function Portfolio({ portfolio, markets }) {
         {portfolio.positions && portfolio.positions.length > 0 ? (
           <div className="positions-list">
             {portfolio.positions.map((position, index) => {
-              const pnl = (position.currentPrice - position.avgPrice) * position.shares;
-              const pnlPercent = position.avgPrice > 0 
-                ? ((position.currentPrice - position.avgPrice) / position.avgPrice * 100).toFixed(1)
+              // Calculate P&L based on cost basis and current value
+              const currentValue = position.currentValue || position.costBasis;
+              const pnl = currentValue - position.costBasis;
+              const pnlPercent = position.costBasis > 0 
+                ? ((pnl / position.costBasis) * 100).toFixed(1)
                 : 0;
 
               return (
@@ -75,16 +77,20 @@ export default function Portfolio({ portfolio, markets }) {
                   <div className="position-details">
                     <div className="detail">
                       <span className="label">Avg Price</span>
-                      <span className="value">{(position.avgPrice * 100).toFixed(1)}¢</span>
+                      <span className="value">{((position.avgPrice || 0) * 100).toFixed(1)}¢</span>
                     </div>
                     <div className="detail">
                       <span className="label">Current</span>
-                      <span className="value">{(position.currentPrice * 100).toFixed(1)}¢</span>
+                      <span className="value">{((position.currentPrice || 0) * 100).toFixed(1)}¢</span>
+                    </div>
+                    <div className="detail">
+                      <span className="label">Cost</span>
+                      <span className="value">{(position.costBasis || 0).toFixed(2)} ZEC</span>
                     </div>
                     <div className="detail">
                       <span className="label">P&L</span>
                       <span className={`value ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} ZEC ({pnlPercent}%)
+                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} ZEC ({pnlPercent}%)
                       </span>
                     </div>
                   </div>

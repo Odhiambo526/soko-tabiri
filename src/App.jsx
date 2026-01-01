@@ -133,11 +133,13 @@ function App() {
     try {
       const result = await api.requestFaucet(wallet.userId, 5.0);
       if (result.success) {
+        // Handle both response formats
+        const newBalance = result.newBalance ?? result.balance?.available ?? (wallet.balance + (result.credited || 10));
         setWallet(prev => ({
           ...prev,
-          balance: result.newBalance,
+          balance: newBalance,
         }));
-        alert(`Credited ${result.credited} testnet ZEC!\nTx: ${result.txHash}`);
+        alert(`Credited ${result.credited || 10} testnet ZEC!\nTx: ${result.txHash || 'demo'}`);
         fetchPortfolio();
       }
     } catch (error) {
@@ -145,7 +147,7 @@ function App() {
       // Demo mode fallback
       setWallet(prev => ({
         ...prev,
-        balance: prev.balance + 5.0,
+        balance: (prev.balance || 0) + 5.0,
       }));
       alert('Demo mode: Credited 5 ZEC');
     }

@@ -1,4 +1,18 @@
-const API_BASE = 'http://localhost:3001/api';
+// Use environment variable or dynamically determine the API URL
+// In development, Vite exposes env vars via import.meta.env
+const getApiBase = () => {
+  // Check for Vite environment variable
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+    return `${import.meta.env.VITE_API_URL}/api`;
+  }
+  // Use same host as the frontend (works when both are served from same origin)
+  // Or fallback to localhost for local development
+  const host = window.location.hostname;
+  const port = 3001;
+  return `http://${host}:${port}/api`;
+};
+
+const API_BASE = getApiBase();
 
 class ApiService {
   async request(endpoint, options = {}) {

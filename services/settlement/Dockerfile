@@ -14,7 +14,7 @@ RUN apk add --no-cache wget
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy proto files
 COPY proto ./proto

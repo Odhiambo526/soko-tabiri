@@ -3,6 +3,9 @@ import { TrendingUp, Users, Clock, Zap, MapPin } from 'lucide-react';
 
 export default function MarketCard({ market, onSelect, index }) {
   const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null) {
+      return '0';
+    }
     if (amount >= 1000000) {
       return `${(amount / 1000000).toFixed(1)}M`;
     }

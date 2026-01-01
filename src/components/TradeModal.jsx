@@ -3,13 +3,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Zap, TrendingUp, TrendingDown, AlertCircle, Shield, Loader } from 'lucide-react';
 import api from '../services/api';
 
-export default function TradeModal({ market, onClose, wallet, onTrade }) {
+export default function TradeModal({ market, onClose, wallet = {}, onTrade }) {
   const [side, setSide] = useState('yes');
   const [amount, setAmount] = useState('');
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [trading, setTrading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Safely get wallet properties with defaults
+  const safeWallet = {
+    connected: wallet?.connected || false,
+    balance: typeof wallet?.balance === 'number' ? wallet.balance : 0,
+  };
 
   // Fetch quote when amount changes
   useEffect(() => {
@@ -24,7 +30,38 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
       
       try {
         const data = await api.getQuote(market.id, side, parseFloat(amount));
-        setQuote(data.quote);
+        // Handle nested quote structure from API
+        const quoteData = data.quote?.quote || data.quote;
+        
+        // Parse values from API
+        const parsedShares = parseInt(quoteData.shares) || 0;
+        const amountZec = parseFloat(amount);
+        const avgPricePerShare = parseFloat(quoteData.avgPrice) || 0;
+        
+        // Each share pays 1 ZEC if the prediction is correct
+        // But shares are scaled, so we need to calculate properly
+        // Max payout = shares (if each share = 1 unit of value)
+        // The API returns shares in internal units, we need to convert
+        
+        // Calculate based on the actual price paid
+        // If you pay X ZEC at price P, you get X/P shares
+        // If correct, each share pays 1 ZEC, so payout = X/P ZEC
+        const effectivePrice = side === 'yes' ? (market?.yesPrice || 0.5) : (market?.noPrice || 0.5);
+        const estimatedShares = amountZec / effectivePrice;
+        const maxPayoutZec = estimatedShares; // Each share pays 1 ZEC if correct
+        const profitZec = maxPayoutZec - amountZec;
+        const roiPercent = amountZec > 0 ? (profitZec / amountZec) * 100 : 0;
+        
+        setQuote({
+          shares: parsedShares,
+          avgPrice: avgPricePerShare,
+          newYesPrice: parseFloat(quoteData.newYesPrice) || 0,
+          newNoPrice: parseFloat(quoteData.newNoPrice) || 0,
+          fee: parseFloat(quoteData.fee) / 100000000 || 0,
+          maxPayout: maxPayoutZec,
+          potentialProfit: profitZec,
+          roi: roiPercent.toFixed(2),
+        });
       } catch (err) {
         console.error('Quote error:', err);
         setError('Failed to get quote');
@@ -58,8 +95,9 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
     }
   };
 
-  const currentPrice = side === 'yes' ? market.yesPrice : market.noPrice;
-  const insufficientBalance = parseFloat(amount) > wallet.balance;
+  const currentPrice = side === 'yes' ? (market?.yesPrice || 0) : (market?.noPrice || 0);
+  const walletBalance = safeWallet.balance;
+  const insufficientBalance = parseFloat(amount || 0) > walletBalance;
 
   return (
     <AnimatePresence>
@@ -82,8 +120,8 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
           </button>
 
           <div className="modal-header">
-            <span className="category-tag">{market.category}</span>
-            <h2>{market.title}</h2>
+            <span className="category-tag">{market?.category || 'Market'}</span>
+            <h2>{market?.title || 'Trade'}</h2>
           </div>
 
           <div className="side-selector">
@@ -94,7 +132,7 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
               <TrendingUp size={20} />
               <div className="side-info">
                 <span className="side-label">Yes</span>
-                <span className="side-price">{(market.yesPrice * 100).toFixed(0)}¢</span>
+                <span className="side-price">{((market?.yesPrice || 0) * 100).toFixed(0)}¢</span>
               </div>
             </button>
             <button
@@ -104,7 +142,7 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
               <TrendingDown size={20} />
               <div className="side-info">
                 <span className="side-label">No</span>
-                <span className="side-price">{(market.noPrice * 100).toFixed(0)}¢</span>
+                <span className="side-price">{((market?.noPrice || 0) * 100).toFixed(0)}¢</span>
               </div>
             </button>
           </div>
@@ -123,13 +161,13 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
               />
               <button 
                 className="max-btn"
-                onClick={() => handleAmountChange(wallet.balance.toString())}
+                onClick={() => handleAmountChange(walletBalance.toString())}
               >
                 MAX
               </button>
             </div>
             <div className="balance-info">
-              Balance: <span className={insufficientBalance ? 'error' : ''}>{wallet.balance.toFixed(4)} ZEC</span>
+              Balance: <span className={insufficientBalance ? 'error' : ''}>{walletBalance.toFixed(4)} ZEC</span>
             </div>
           </div>
 
@@ -148,20 +186,20 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
               </div>
               <div className="summary-row">
                 <span>Avg Price</span>
-                <span className="value">{(quote.avgPrice * 100).toFixed(2)}¢ per share</span>
+                <span className="value">{((quote.avgPrice || 0) * 100).toFixed(2)}¢ per share</span>
               </div>
               <div className="summary-row highlight">
                 <span>Max Payout (if correct)</span>
-                <span className="value payout">{quote.maxPayout.toFixed(4)} ZEC</span>
+                <span className="value payout">{(quote.maxPayout || 0).toFixed(4)} ZEC</span>
               </div>
               <div className="summary-row">
                 <span>Potential Profit</span>
-                <span className="value profit">+{quote.potentialProfit.toFixed(4)} ZEC ({quote.roi}%)</span>
+                <span className="value profit">+{(quote.potentialProfit || 0).toFixed(4)} ZEC ({quote.roi || 0}%)</span>
               </div>
               <div className="summary-row">
                 <span>New Market Price</span>
                 <span className="value">
-                  Yes: {(quote.newYesPrice * 100).toFixed(0)}¢ / No: {(quote.newNoPrice * 100).toFixed(0)}¢
+                  Yes: {((quote.newYesPrice || 0) * 100).toFixed(0)}¢ / No: {((quote.newNoPrice || 0) * 100).toFixed(0)}¢
                 </span>
               </div>
             </div>
@@ -182,7 +220,7 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
           <motion.button
             className={`trade-btn ${side}`}
             onClick={handleTrade}
-            disabled={!amount || parseFloat(amount) <= 0 || insufficientBalance || trading || !wallet.connected}
+            disabled={!amount || parseFloat(amount) <= 0 || insufficientBalance || trading || !safeWallet.connected}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
           >
@@ -191,7 +229,7 @@ export default function TradeModal({ market, onClose, wallet, onTrade }) {
                 <Loader size={18} className="spinner" />
                 Processing...
               </>
-            ) : !wallet.connected ? (
+            ) : !safeWallet.connected ? (
               'Connect Wallet First'
             ) : (
               `Buy ${side === 'yes' ? 'Yes' : 'No'} - ${amount || '0'} ZEC`
