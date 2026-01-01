@@ -61,13 +61,13 @@ export function calculateTrade(yesShares, noShares, side, sharesToBuy, feeBps = 
   const yesPrice = Number(newNoShares) / Number(totalShares);
   const noPrice = Number(newYesShares) / Number(totalShares);
 
-  // Verify invariant (with tolerance for rounding)
+  // Verify invariant: k should never decrease (rounding up may increase it slightly)
+  // This is expected behavior - we round up to prevent liquidity loss
   const newK = newYesShares * newNoShares;
-  const kDiff = newK > k ? newK - k : k - newK;
-  const tolerance = k / 1000000n; // 0.0001% tolerance
-  if (kDiff > tolerance) {
-    throw new Error('AMM invariant violation');
+  if (newK < k) {
+    throw new Error('AMM invariant violation: k decreased');
   }
+  // Allow k to increase slightly due to rounding (tested separately with reasonable tolerance)
 
   return {
     newYesShares,
