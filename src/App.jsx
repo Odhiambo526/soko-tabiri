@@ -98,32 +98,49 @@ function App() {
 
   const handleConnectWallet = async () => {
     try {
-      const savedKey = localStorage.getItem('soko_viewing_key');
-      const data = await api.connectWallet(savedKey);
+      // Get saved key or generate a new one for demo
+      let viewingKey = localStorage.getItem('soko_viewing_key');
+      if (!viewingKey) {
+        // Generate a random viewing key for demo purposes
+        viewingKey = 'demo_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('soko_viewing_key', viewingKey);
+      }
+      
+      const data = await api.connectWallet(viewingKey);
 
       if (data.success) {
-        localStorage.setItem('soko_viewing_key', data.user.viewingKey);
-
         setWallet({
           connected: true,
           userId: data.user.id,
-          address: data.user.transparentAddress,
-          shieldedAddress: data.user.shieldedAddress,
-          viewingKey: data.user.viewingKey,
-          balance: data.balance.available,
+          address: data.user.transparentAddress || `t1${data.user.id.slice(0, 8)}`,
+          shieldedAddress: data.user.shieldedAddress || `zs1${data.user.id.slice(0, 8)}`,
+          viewingKey: data.user.viewingKey || viewingKey,
+          balance: data.balance?.available || 0,
         });
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
-      // Fallback for demo mode
-      setWallet({
-        connected: true,
-        userId: 'demo_user',
-        address: 'zs1demo...address',
-        shieldedAddress: 'zs1demo...shielded',
-        viewingKey: 'demo_viewing_key',
-        balance: 0,
-      });
+      // Try again with a fresh viewing key
+      try {
+        const newKey = 'demo_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('soko_viewing_key', newKey);
+        const data = await api.connectWallet(newKey);
+        if (data.success) {
+          setWallet({
+            connected: true,
+            userId: data.user.id,
+            address: data.user.transparentAddress || `t1${data.user.id.slice(0, 8)}`,
+            shieldedAddress: data.user.shieldedAddress || `zs1${data.user.id.slice(0, 8)}`,
+            viewingKey: newKey,
+            balance: data.balance?.available || 0,
+          });
+          return;
+        }
+      } catch (retryError) {
+        console.error('Retry failed:', retryError);
+      }
+      // Final fallback - alert user
+      alert('Failed to connect wallet. Please check if the backend is running.');
     }
   };
 
