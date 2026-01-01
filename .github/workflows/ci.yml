@@ -159,7 +159,7 @@ jobs:
 
       - name: Start services
         run: |
-          docker-compose -f docker-compose.yml up -d --build
+          docker compose -f docker-compose.yml up -d --build
           sleep 30
 
       - name: Check service health - Gateway
@@ -186,11 +186,11 @@ jobs:
 
       - name: View service logs on failure
         if: failure()
-        run: docker-compose -f docker-compose.yml logs
+        run: docker compose -f docker-compose.yml logs
 
       - name: Stop services
         if: always()
-        run: docker-compose -f docker-compose.yml down -v
+        run: docker compose -f docker-compose.yml down -v
 
   security-scan:
     name: Security Scan
