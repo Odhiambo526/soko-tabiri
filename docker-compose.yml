@@ -1,0 +1,262 @@
+# Soko Tabiri - Docker Compose Configuration
+# Privacy-Preserving Prediction Markets on Zcash
+#
+# Usage: docker-compose -f docker-compose.yml up --build
+# Or:    make dev-up
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # INFRASTRUCTURE
+  # =============================================================================
+  
+  postgres:
+    image: postgres:15-alpine
+    # ASSUMPTION: Postgres 15 (LTS) - not specified in repo
+    container_name: soko-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-soko}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-soko_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-soko_tabiri}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-soko} -d ${POSTGRES_DB:-soko_tabiri}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - soko-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: soko-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - soko-network
+
+  # =============================================================================
+  # APPLICATION SERVICES
+  # =============================================================================
+
+  gateway-api:
+    build:
+      context: ./services/gateway-api
+      dockerfile: Dockerfile
+    container_name: soko-gateway
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3001
+      # Database
+      DATABASE_URL: postgres://${POSTGRES_USER:-soko}:${POSTGRES_PASSWORD:-soko_dev_password}@postgres:5432/${POSTGRES_DB:-soko_tabiri}
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Internal service URLs
+      ENGINE_URL: http://engine:3002
+      SETTLEMENT_URL: http://settlement:3003
+      ORACLE_URL: http://oracle:3004
+      # Service-to-service auth
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET:-dev_hmac_secret_change_in_production}
+      # CORS
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - soko-network
+    # Privacy: Gateway handles user-facing requests. No direct Zcash key access.
+    # All settlement requests routed to settlement service via HMAC-authenticated internal calls.
+
+  engine:
+    build:
+      context: ./services/engine
+      dockerfile: Dockerfile
+    container_name: soko-engine
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3002
+      DATABASE_URL: postgres://${POSTGRES_USER:-soko}:${POSTGRES_PASSWORD:-soko_dev_password}@postgres:5432/${POSTGRES_DB:-soko_tabiri}
+      REDIS_URL: redis://redis:6379
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET:-dev_hmac_secret_change_in_production}
+      SETTLEMENT_URL: http://settlement:3003
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - soko-network
+    # Privacy: Engine performs AMM math and orderbook matching.
+    # No access to Zcash keys. Outputs settlement_jobs for the settlement service.
+
+  settlement:
+    build:
+      context: ./services/settlement
+      dockerfile: Dockerfile
+    container_name: soko-settlement
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3003
+      DATABASE_URL: postgres://${POSTGRES_USER:-soko}:${POSTGRES_PASSWORD:-soko_dev_password}@postgres:5432/${POSTGRES_DB:-soko_tabiri}
+      REDIS_URL: redis://redis:6379
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET:-dev_hmac_secret_change_in_production}
+      # Zcash lightwalletd connection
+      LIGHTWALLETD_URL: ${LIGHTWALLETD_URL:-lightwalletd.testnet.electriccoin.co:9067}
+      ZCASH_NETWORK: ${ZCASH_NETWORK:-testnet}
+      # KMS for signing (no raw keys in env)
+      KMS_KEY_ID: ${KMS_KEY_ID:-}
+      KMS_PROVIDER: ${KMS_PROVIDER:-mock}
+      # Privacy controls
+      ALLOW_DESHIELD: ${ALLOW_DESHIELD:-false}
+      DESHIELD_KYC: ${DESHIELD_KYC:-false}
+      # Mock mode for local dev
+      MOCK_LIGHTWALLETD: ${MOCK_LIGHTWALLETD:-true}
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - soko-network
+    # Privacy: Settlement service is the ONLY service with Zcash key access (via KMS).
+    # Default: shielded-only (z-to-z). T-address flows require ALLOW_DESHIELD=true + DESHIELD_KYC=true.
+    # Keys are NEVER stored in env; KMS_KEY_ID references external HSM/KMS.
+
+  oracle:
+    build:
+      context: ./services/oracle
+      dockerfile: Dockerfile
+    container_name: soko-oracle
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3004
+      DATABASE_URL: postgres://${POSTGRES_USER:-soko}:${POSTGRES_PASSWORD:-soko_dev_password}@postgres:5432/${POSTGRES_DB:-soko_tabiri}
+      REDIS_URL: redis://redis:6379
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET:-dev_hmac_secret_change_in_production}
+      SETTLEMENT_URL: http://settlement:3003
+      # Dispute configuration
+      DISPUTE_WINDOW_HOURS: ${DISPUTE_WINDOW_HOURS:-24}
+      MIN_STAKE_ZAT: ${MIN_STAKE_ZAT:-100000000}
+    ports:
+      - "3004:3004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - soko-network
+    # Privacy: Oracle manages attestations and disputes. No direct Zcash key access.
+    # Stake slashing routed through settlement service.
+
+  # =============================================================================
+  # MONITORING (Optional for local dev)
+  # =============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: soko-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - soko-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: soko-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - soko-network
+    profiles:
+      - monitoring
+
+  # =============================================================================
+  # FRONTEND (React)
+  # =============================================================================
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: soko-frontend
+    environment:
+      VITE_API_URL: http://localhost:3001
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway-api
+    networks:
+      - soko-network
+    profiles:
+      - frontend
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  soko-network:
+    driver: bridge
+

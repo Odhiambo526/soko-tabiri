@@ -4,10 +4,11 @@
 
 ![Zcash](https://img.shields.io/badge/Powered%20by-Zcash-F4B728?style=flat-square)
 ![Network](https://img.shields.io/badge/Network-Testnet-blue?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 ## Overview
 
-Soko Tabiri ("Market Prediction" in Swahili) is a privacy-preserving prediction market platform focusing on regions underserved by existing platforms like Polymarket—Africa, China, Japan, Russia, Southeast Asia, Middle East, Latin America, and South Asia.
+Soko Tabiri ("Market Prediction" in Swahili) is a privacy-preserving prediction market platform focusing on regions underserved by existing platforms—Africa, China, Japan, Russia, Southeast Asia, Middle East, Latin America, and South Asia.
 
 ### Why Privacy Matters
 
@@ -17,81 +18,72 @@ Unlike Polymarket (Polygon) where every bet is publicly visible, Soko Tabiri use
 - **Economic forecasts** that could reveal business intelligence
 - **Sensitive markets** where public exposure has real consequences
 
-## Regions Covered
+## Architecture
 
-| Region | Example Markets |
-|--------|-----------------|
-| 🌍 **Africa** | Nigeria Naira, South Africa load shedding, Kenya M-Pesa, Ethiopia GERD |
-| 🇷🇺 **Russia & CIS** | Ruble exchange rate, Gazprom exports, Kazakhstan AIFC |
-| 🇨🇳 **China** | GDP growth, BYD vs Tesla, Evergrande, Hang Seng, TSMC |
-| 🇯🇵 **Japan** | BOJ interest rates, USD/JPY, Nikkei 225, Toyota |
-| 🌏 **Southeast Asia** | Indonesia Nusantara, Vietnam GDP, Thailand casinos |
-| 🏜️ **Middle East** | Saudi NEOM, UAE dirham, Iran-Saudi relations |
-| 🌎 **Latin America** | Argentina inflation, Brazil World Cup, Mexico peso |
-| 🇮🇳 **South Asia** | India GDP ranking, Jio satellite, Pakistan IMF |
+Soko Tabiri uses a four-service microservices architecture:
 
-## Features
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Frontend  │────▶│  Gateway    │────▶│   Engine    │
+│   (React)   │     │    API      │     │ (AMM/Order) │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │                    │
+                           ▼                    ▼
+                    ┌─────────────┐     ┌─────────────┐
+                    │   Oracle    │     │ Settlement  │
+                    │  (Dispute)  │     │(Lightwalletd)│
+                    └─────────────┘     └─────────────┘
+```
 
-- 🛡️ **Private Trading** - Shielded transactions via Zcash zk-SNARKs
-- 🌍 **Global Coverage** - Markets Polymarket doesn't touch
-- 💱 **AMM Trading** - Constant Product Market Maker for instant liquidity
-- 💰 **Testnet Faucet** - Get test ZEC to try the platform
-- 📱 **Mobile-First** - Responsive PWA design
+| Service | Port | Description |
+|---------|------|-------------|
+| Gateway API | 3001 | User-facing API, routes requests |
+| Engine | 3002 | AMM math, orderbook matching |
+| Settlement | 3003 | Zcash lightwalletd adapter, signing |
+| Oracle | 3004 | Reporter management, disputes |
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
+- Docker and Docker Compose
+- Node.js 18+ (for local development)
+- Make (optional)
 
-### Installation
+### Start Services
 
 ```bash
+# Clone repository
 git clone https://github.com/Odhiambo526/soko-tabiri.git
 cd soko-tabiri
 
-# Frontend
-npm install
+# Copy environment file
+cp .env.example .env
 
-# Backend
-cd backend
-npm install
+# Start all services
+make dev-up
+# Or: docker-compose -f docker-compose.yml up --build
 ```
 
-### Running
+### Verify Health
 
-**Terminal 1 - Backend:**
 ```bash
-cd backend
-npm run dev
+curl http://localhost:3001/health  # Gateway
+curl http://localhost:3002/health  # Engine
+curl http://localhost:3003/health  # Settlement
+curl http://localhost:3004/health  # Oracle
 ```
 
-**Terminal 2 - Frontend:**
+### Run Tests
+
 ```bash
-npm run dev
+make test
+# Or: cd services/engine && npm test
 ```
-
-Open http://localhost:5173
-
-## Usage
-
-1. **Connect Wallet** - Click "Connect Zcash"
-2. **Get Test ZEC** - Click the faucet button (💧)
-3. **Browse Markets** - Filter by region (Africa, China, Japan, etc.)
-4. **Trade** - Buy YES or NO shares on any market
-5. **Track Portfolio** - View positions and P&L
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Frontend | React 18, Vite, Framer Motion |
-| Backend | Node.js, Express, SQLite |
-| Blockchain | Zcash (lightwalletd gRPC) |
-| Trading | CPMM (Uniswap-style AMM) |
 
 ## API Endpoints
+
+### Gateway API (Port 3001)
 
 ```
 GET  /api/markets              - List all markets
@@ -99,9 +91,120 @@ GET  /api/markets/:id          - Market details
 POST /api/markets/:id/quote    - Get trade quote
 POST /api/markets/:id/trade    - Execute trade
 POST /api/wallet/connect       - Connect wallet
+GET  /api/wallet/:id/balance   - Get balance
+GET  /api/wallet/:id/positions - Get positions
 POST /api/wallet/:id/faucet    - Request testnet ZEC
-GET  /api/network/status       - Network status
 ```
+
+### Metrics & Health
+
+All services expose:
+- `GET /health` - Health check
+- `GET /metrics` - Prometheus metrics
+
+## Privacy Constraints
+
+Soko Tabiri enforces **shielded-first privacy**:
+
+1. **Default**: All transactions use shielded addresses (z-to-z)
+2. **Transparent flows**: Only available with explicit flags:
+   - `ALLOW_DESHIELD=true` - Enable transparent transactions
+   - `DESHIELD_KYC=true` - Require KYC verification
+3. **Key management**: Keys stored in KMS/HSM, never in environment variables
+
+## Monitoring
+
+Start with monitoring stack:
+
+```bash
+make dev-monitoring
+# Or: docker-compose --profile monitoring up -d
+```
+
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000 (admin/admin)
+
+## Documentation
+
+- [SECURITY.md](./SECURITY.md) - Security policy and measures
+- [THREAT_MODEL.md](./THREAT_MODEL.md) - Top 6 threats and mitigations
+- [OPERATIONAL_RUNBOOK.md](./OPERATIONAL_RUNBOOK.md) - Operational procedures
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Frontend | React 19, Vite, Framer Motion |
+| Backend | Node.js 18, Express |
+| Database | PostgreSQL 15 |
+| Cache | Redis 7 |
+| Blockchain | Zcash (lightwalletd gRPC) |
+| Trading | CPMM (Constant Product AMM) |
+| Monitoring | Prometheus, Grafana |
+
+## ASSUMPTIONS
+
+The following assumptions were made during implementation:
+
+1. **Node.js 18 (LTS)** - Not specified in original repo
+2. **PostgreSQL 15** - Not specified in original repo
+3. **Package versions**: See individual `package.json` files for specific versions
+4. **Resolution sources**: Marked as "EXAMPLE SOURCE - verify before use"
+
+## Regions Covered
+
+| Region | Example Markets |
+|--------|-----------------|
+| 🌍 **Africa** | Nigeria Naira, South Africa load shedding, Kenya M-Pesa |
+| 🇷🇺 **Russia & CIS** | Ruble exchange rate, Gazprom exports |
+| 🇨🇳 **China** | GDP growth, BYD vs Tesla, TSMC |
+| 🇯🇵 **Japan** | BOJ interest rates, USD/JPY |
+| 🌏 **Southeast Asia** | Indonesia Nusantara, Thailand casinos |
+| 🏜️ **Middle East** | Saudi NEOM, UAE dirham |
+| 🌎 **Latin America** | Argentina inflation, Brazil |
+| 🇮🇳 **South Asia** | India GDP ranking, Jio satellite |
+
+## Development
+
+### Project Structure
+
+```
+soko-tabiri/
+├── docker-compose.yml
+├── Makefile
+├── services/
+│   ├── gateway-api/
+│   ├── engine/
+│   ├── settlement/
+│   └── oracle/
+├── migrations/
+├── monitoring/
+└── .github/workflows/
+```
+
+### Running Individual Services
+
+```bash
+# Gateway API
+cd services/gateway-api && npm run dev
+
+# Engine
+cd services/engine && npm run dev
+
+# Settlement
+cd services/settlement && npm run dev
+
+# Oracle
+cd services/oracle && npm run dev
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes
+4. Run tests: `make test`
+5. Submit a pull request
 
 ## License
 
