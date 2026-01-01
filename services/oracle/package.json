@@ -1,0 +1,33 @@
+{
+  "name": "soko-tabiri-oracle",
+  "version": "1.0.0",
+  "description": "Soko Tabiri Oracle - Reporter and dispute management",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/**/*.test.js",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
+  },
+  "keywords": ["zcash", "prediction-market", "oracle", "dispute"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.0",
+    "express": "^4.18.0",
+    "pg": "^8.11.0",
+    "prom-client": "^15.0.0",
+    "redis": "^4.6.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

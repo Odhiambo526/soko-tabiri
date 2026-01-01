@@ -1,0 +1,24 @@
+{
+  "name": "soko-tabiri-shared",
+  "version": "1.0.0",
+  "description": "Soko Tabiri Shared Utilities",
+  "main": "src/index.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./db": "./src/db.js",
+    "./redis": "./src/redis.js",
+    "./hmac": "./src/hmac.js"
+  },
+  "keywords": ["zcash", "prediction-market", "shared"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.11.0",
+    "redis": "^4.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
